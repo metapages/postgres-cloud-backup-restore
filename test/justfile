@@ -1,0 +1,70 @@
+# Commands for testing the published container
+set shell        := ["bash", "-c"]
+set dotenv-load  := true
+# Tests must not use the development docker-compose.override.yml
+DOCKER_COMPOSE   := "docker-compose -f docker-compose.yml"
+BACKUP_FILE_NAME := `echo "$(date "+%Y-%m-%dT%H:%M:%SZ")-backup.sql.gz"`
+BUCKET_NAME      := "test-bucket"
+
+@_help:
+    printf "\n"
+    just --list --unsorted --list-heading $'⚡ Repository commands for running tests:\n'
+    printf "\n"
+
+# Run tests (inside the core container)
+@test: _ensure_support_containers _ensure_bucket _test
+    echo "TODO: test"
+
+_test: test-db-setup _create_backup test-db-drop _restore_backup
+
+# Create the database and insert test data via docker-compose
+@test-db-setup: (_run_sql "table-create.sql") (_run_sql "data-insert.sql") test-db-verify
+
+# Drop the test_table and confirm that it is gone
+test-db-drop:  (_run_sql "table-drop.sql")
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PG_CONTAINER_ID=$(just _postgres_container_id)
+    RESULT="$(docker exec -it ${PG_CONTAINER_ID} psql -U postgres -d postgres -c '\dt')"
+    if echo $RESULT | grep -q "Did not find any relations."; then
+        echo "✅ Confirm table dropped"
+    else
+        echo "💥 Failed to drop table: $RESULT"
+        exit 1
+    fi
+
+@_ensure_support_containers:
+    cd .. && {{DOCKER_COMPOSE}} up -d postgres localstack
+
+_create_backup:
+    cd .. && {{DOCKER_COMPOSE}} run db-remote-clone backup {{BACKUP_FILE_NAME}}
+
+_restore_backup:
+    cd .. && {{DOCKER_COMPOSE}} run db-remote-clone restore {{BACKUP_FILE_NAME}}
+
+_run_sql file: _ensure_postgres_running
+    #!/usr/bin/env bash
+    set -euo pipefail
+    docker exec -i $(just _postgres_container_id) psql -U postgres -d postgres < sql/{{file}}
+
+test-db-verify:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    RESULT="$(docker exec -i $(just _postgres_container_id) psql -U postgres -d postgres -c 'select * from test_table')"
+    if echo $RESULT | grep -q "d59a8f68-a6f3-11ec-93dd-3f6db85b1e3d | some-name"; then
+        echo "✅ Test data verified in the database"
+    else
+        echo "💥 Data verification failed: query does not contain: 'd59a8f68-a6f3-11ec-93dd-3f6db85b1e3d | some-name'"
+        exit 1
+    fi
+
+@_ensure_postgres_running:
+    cd .. && if ! docker-compose ps --services --status running | grep -q postgres; then echo -e "💥 👉 It looks like the docker-compose postgres service is not running: try 'just _ensure_support_containers'"; fi
+
+@_ensure_bucket: _ensure_support_containers
+    cd .. && {{DOCKER_COMPOSE}} exec localstack awslocal s3 mb s3://{{BUCKET_NAME}} --region us-east-1
+
+@_postgres_container_id:
+    # We cannot use docker-compose exec becuase we need the docker exec "-i" flag but not the "-t" flag and compose only does both
+    # So get the postgres container ID to 'docker exec ...' instead of 'docker-compose exec ...'
+    cd .. && echo $(docker-compose ps --format json | jq -r '.[] | select(.Service == "postgres") | .ID')

@@ -1,0 +1,79 @@
+services:
+
+  db-remote-clone:
+    image: pg-remote-clone
+    container_name: db-remote-clone
+    build:
+      context: src
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      # Configure the postgres database connection
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/postgres
+      - RCLONE_PATH=localstack:test-bucket/backups
+      # pg_dump args
+      # Configure the remote cloud storage
+      - RCLONE_CONFIG_LOCALSTACK_TYPE=s3
+      - RCLONE_CONFIG_LOCALSTACK_ACCESS_KEY_ID=XXXX
+      - RCLONE_CONFIG_LOCALSTACK_SECRET_ACCESS_KEY=XXX
+      - RCLONE_CONFIG_LOCALSTACK_REGION=us-east-1
+      # This is only needed for the local testing environment
+      - RCLONE_CONFIG_LOCALSTACK_ENDPOINT=http://localstack:4566
+      # Optional when developing but recommended when deploying
+      - SLACK_WEBHOOK_URL_ERROR=${SLACK_WEBHOOK_URL_ERROR:-}
+      - SLACK_WEBHOOK_URL_SUCCESS=${SLACK_WEBHOOK_URL_SUCCESS:-}
+      - SLACK_SUCCESS_MESSAGE=Good job! Database backed up!
+    networks:
+      - bridge
+
+  postgres:
+    image: postgres:14.1
+    container_name: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - PGPASSWORD=postgres
+    # volumes:
+    #   - postgres:/var/lib/postgresql/data
+    networks:
+      - bridge
+
+  localstack:
+    image: localstack/localstack:0.14.1
+    container_name: localstack
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - awslocal s3 ls
+      interval: 5s
+      timeout: 10s
+      start_period: 10s
+    environment:
+      - SERVICES=s3
+      - AWS_DEFAULT_REGION=us-east-1
+      # - DEBUG=${DEBUG-}
+      # - DATA_DIR=${DATA_DIR-}
+      # - HOST_TMP_FOLDER=${TMPDIR:-/tmp/}localstack
+    volumes:
+      - localstack:/tmp/localstack
+      # - ./test/aws:/docker-entrypoint-initaws.d
+    networks:
+      - bridge
+
+volumes:
+  localstack:
+
+networks:
+  bridge:
+    driver: bridge

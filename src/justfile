@@ -1,0 +1,100 @@
+# Required e.g. "postgres://postgres:postgres@postgres:5432/postgres"
+export DATABASE_URL              := env_var_or_default("DATABASE_URL", "")
+export DATABASE_BACKUP_ARGS      := env_var_or_default("DATABASE_BACKUP_ARGS", "")
+export DATABASE_RESTORE_ARGS     := env_var_or_default("DATABASE_RESTORE_ARGS", "")
+# Required e.g. s3://my-bucket/backups
+export RCLONE_PATH               := env_var_or_default("RCLONE_PATH", "")
+# Slack config for alerts when things go wrong
+export SLACK_WEBHOOK_URL_ERROR   := env_var_or_default("SLACK_WEBHOOK_URL_ERROR", "")
+# Slack config for alert on successful backups
+export SLACK_WEBHOOK_URL_SUCCESS := env_var_or_default("SLACK_WEBHOOK_URL_SUCCESS", "")
+export SLACK_SUCCESS_MESSAGE     := env_var_or_default("SLACK_SUCCESS_MESSAGE", "Database backed up successfully")
+# Local backup directory, you probably never need to change this
+export BACKUP_DIR                := env_var_or_default("BACKUP_DIR", "/tmp")
+
+###########################################################################
+# Begin commands
+###########################################################################
+_help:
+    #!/usr/bin/env bash
+    echo ""
+    just --list --unsorted --list-heading $'⛅ Database backup/restore to cloud storage:\n\n'
+    echo -e ""
+
+# Create a remote database backup
+backup archive="": _ensure_core_envvars
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ARCHIVE=$(just _archive_name "{{archive}}")
+    just backup-local $ARCHIVE
+    echo "rclone copy $BACKUP_DIR/$ARCHIVE $RCLONE_PATH"
+    set +e
+    rclone copy $BACKUP_DIR/$ARCHIVE $RCLONE_PATH
+    status=$?
+    set -e
+    if [ $status -eq 0 ] ; then
+        echo -e "🌟 backup @ $RCLONE_PATH/$ARCHIVE"
+        just send-slack-message-success "$SLACK_SUCCESS_MESSAGE"
+    else
+        echo -e "❗ backup failed @ $RCLONE_PATH/$ARCHIVE"
+        just send-slack-message-error "Database backup: rclone copy failed"
+    fi
+
+# Create backups on a cron schedule. Defaults to daily backups
+@cron crontab="0       0       *       *       *" +command="backup": _ensure_core_envvars
+    mkdir -p cron
+    printf '# min	hour	day	month	weekday	command\n{{crontab}}       just /home/justuser/{{command}}\n' > cron/justuser
+    @supercronic /home/justuser/cron/justuser
+
+# Restore a remote backup to the database
+restore archive: _ensure_core_envvars
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rclone copy {{join(RCLONE_PATH, archive)}} $BACKUP_DIR/
+    echo -e "✅ $RCLONE_PATH  -->  $BACKUP_DIR/{{archive}}"
+    gunzip < $BACKUP_DIR/{{archive}} | pg_restore -d $DATABASE_URL
+    echo -e "✅🌟 database restored 🌟"
+
+# Called internally: create a backup to the local file system @ $BACKUP_DIR
+backup-local archive="": _ensure_core_envvars
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p $BACKUP_DIR
+    ARCHIVE_NAME=$(just _archive_name "{{archive}}")
+    echo "...starting to backup PostGRES to $BACKUP_DIR/$ARCHIVE_NAME..."
+    set +e
+    pg_dump --format=custom $DATABASE_BACKUP_ARGS "$DATABASE_URL" | gzip > $BACKUP_DIR/$ARCHIVE_NAME
+    status=$?
+    set -e
+    if [ $status -eq 0 ] ; then
+        echo -e "✅ pg_dump "
+    else
+        echo -e "❗ pg_dump failed @ $ARCHIVE_NAME"
+        just send-slack-message-error "Database backup: pg_dump failed"
+    fi
+
+# Send slack message on the error channel. Only sends if SLACK_WEBHOOK_URL_ERROR is set
+send-slack-message-error message:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "$SLACK_WEBHOOK_URL_ERROR" = "" ]; then exit 0; fi
+    curl --silent -X POST -H 'Content-type: application/json' --data '{"text":"{{message}}"}' $SLACK_WEBHOOK_URL_ERROR > /dev/null
+
+# Send slack message on the success channel. Only sends if SLACK_WEBHOOK_URL_SUCCESS is set
+send-slack-message-success message:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "$SLACK_WEBHOOK_URL_SUCCESS" = "" ]; then exit 0; fi
+    curl --silent -X POST -H 'Content-type: application/json' --data '{"text":"{{message}}"}' $SLACK_WEBHOOK_URL_SUCCESS
+
+@_archive_name NAME="":
+    if [ "{{NAME}}" = "" ]; then \
+        echo "$(date "+%Y-%m-%dT%H:%M:%SZ")-backup.sql.gz"; \
+    else \
+        echo "{{NAME}}";\
+    fi
+
+@_ensure_core_envvars: (_ensure "DATABASE_URL") (_ensure "RCLONE_PATH")
+
+@_ensure envvar:
+    if [ "${{envvar}}" = "" ]; then echo "💥 Missing env var: {{envvar}}"; exit 1; fi

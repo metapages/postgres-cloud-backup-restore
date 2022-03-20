@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS test_table (user_id uuid PRIMARY KEY, username VARCHAR ( 50 ) UNIQUE NOT NULL);
