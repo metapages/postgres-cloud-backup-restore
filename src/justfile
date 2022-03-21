@@ -3,7 +3,7 @@ export DATABASE_URL              := env_var_or_default("DATABASE_URL", "")
 export DATABASE_BACKUP_ARGS      := env_var_or_default("DATABASE_BACKUP_ARGS", "")
 export DATABASE_RESTORE_ARGS     := env_var_or_default("DATABASE_RESTORE_ARGS", "")
 # Required e.g. s3://my-bucket/backups
-export RCLONE_PATH               := env_var_or_default("RCLONE_PATH", "")
+export RCLONE_URL               := env_var_or_default("RCLONE_URL", "")
 # Slack config for alerts when things go wrong
 export SLACK_WEBHOOK_URL_ERROR   := env_var_or_default("SLACK_WEBHOOK_URL_ERROR", "")
 # Slack config for alert on successful backups
@@ -27,16 +27,16 @@ backup archive="": _ensure_core_envvars
     set -euo pipefail
     ARCHIVE=$(just _archive_name "{{archive}}")
     just backup-local $ARCHIVE
-    echo "rclone copy $BACKUP_DIR/$ARCHIVE $RCLONE_PATH"
+    echo "rclone copy $BACKUP_DIR/$ARCHIVE $RCLONE_URL"
     set +e
-    rclone copy $BACKUP_DIR/$ARCHIVE $RCLONE_PATH
+    rclone copy $BACKUP_DIR/$ARCHIVE $RCLONE_URL
     status=$?
     set -e
     if [ $status -eq 0 ] ; then
-        echo -e "🌟 backup @ $RCLONE_PATH/$ARCHIVE"
+        echo -e "🌟 backup @ $RCLONE_URL/$ARCHIVE"
         just send-slack-message-success "$SLACK_SUCCESS_MESSAGE"
     else
-        echo -e "❗ backup failed @ $RCLONE_PATH/$ARCHIVE"
+        echo -e "❗ backup failed @ $RCLONE_URL/$ARCHIVE"
         just send-slack-message-error "Database backup: rclone copy failed"
     fi
 
@@ -50,8 +50,8 @@ backup archive="": _ensure_core_envvars
 restore archive: _ensure_core_envvars
     #!/usr/bin/env bash
     set -euo pipefail
-    rclone copy {{join(RCLONE_PATH, archive)}} $BACKUP_DIR/
-    echo -e "✅ $RCLONE_PATH  -->  $BACKUP_DIR/{{archive}}"
+    rclone copy {{join(RCLONE_URL, archive)}} $BACKUP_DIR/
+    echo -e "✅ $RCLONE_URL  -->  $BACKUP_DIR/{{archive}}"
     gunzip < $BACKUP_DIR/{{archive}} | pg_restore -d $DATABASE_URL
     echo -e "✅🌟 database restored 🌟"
 
@@ -94,7 +94,7 @@ send-slack-message-success message:
         echo "{{NAME}}";\
     fi
 
-@_ensure_core_envvars: (_ensure "DATABASE_URL") (_ensure "RCLONE_PATH")
+@_ensure_core_envvars: (_ensure "DATABASE_URL") (_ensure "RCLONE_URL")
 
 @_ensure envvar:
     if [ "${{envvar}}" = "" ]; then echo "💥 Missing env var: {{envvar}}"; exit 1; fi

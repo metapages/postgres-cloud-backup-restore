@@ -25,38 +25,3 @@ jobs:
           DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
         with:
           command: "just publish"
-
-
-
-
-
-# jobs:
-#   tag:
-#     runs-on: ubuntu-latest
-#     steps:
-
-#     - id: checkout
-#       uses: actions/checkout@v2
-#       with:
-#         fetch-depth: '0'
-
-#     - name: Set env
-#       run: echo "DOCKER_TAG=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-
-#     - name: Build and test app on the self-hosted runner
-#       uses: ./.github/actions/self-hosted
-#       timeout-minutes: 30
-#       env:
-#         DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-#         DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
-#       with:
-#         command: "just publish"
-#         # github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-
-#     # - name: Test
-#     #   env: # Or as an environment variable
-#     #     DOCKER_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-#     #     DOCKER_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
-#     #   run: |
-#     #     echo $DOCKER_TAG
-#     #     echo ${{ env.DOCKER_TAG }}

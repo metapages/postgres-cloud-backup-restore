@@ -7,7 +7,7 @@ DOCKER_PASSWORD   := env_var_or_default("DOCKER_PASSWORD", "")
 
 @_help:
     printf "\n"
-    just --list --unsorted --list-heading $'⚡ Repository commands:\n'
+    just --list --unsorted --list-heading $'⚡ Repository commands: (docs for needed env vars https://github.com/metapages/postgres-cloud-backup-restore)\n'
     printf "\n"
 
 # Push (versioned from git tag) (both arm64/amd64) images to the registry.
