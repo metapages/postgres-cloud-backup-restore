@@ -1,0 +1,5 @@
+services:
+
+  db-remote-clone:
+    volumes:
+      - ./src:/home/justuser
