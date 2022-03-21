@@ -1,0 +1,6 @@
+.config
+.dockerignore
+.bas_history
+cron
+Dockerfile
+README.md
