@@ -21,24 +21,24 @@ Minimal requirements:
   - RCLONE_URL (e.g. `aws:my-bucket/my-backups`)
   - RCLONE_CONFIG_* (see [docker-compose.yml](./docker-compose.yml) for an example using localstack, and an example how to e.g. set one of the S3 credentials: [RCLONE_S3_ACCESS_KEY_ID](https://rclone.org/s3/#s3-access-key-id ))
 2. Run the container with the env vars and create a backup:
-  - ```
-    metapage/postgres-cloud-backup-restore backup
-    ```
+```
+metapage/postgres-cloud-backup-restore backup
+```
 
 ## How to restore from a backup
 
 1. Run the container with the env vars above and restore from a backup:
-  - ```
-    metapage/postgres-cloud-backup-restore restore <name of backup file>
-    ```
+```
+metapage/postgres-cloud-backup-restore restore <name of backup file>
+```
 
 
 ## Cron backups
 
 1. Run the container with the env vars above and schedule automated backups:
-  - ```
-    metapage/postgres-cloud-backup-restore cron "0 0 * * *"
-    ```
+```
+metapage/postgres-cloud-backup-restore cron "0 0 * * *"
+```
 
 
 ## Env vars
