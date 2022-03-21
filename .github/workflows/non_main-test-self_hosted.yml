@@ -13,14 +13,6 @@ on:
       - "!main"
       - "!master"
 
-    # only test on changes to the app/ + ci/ directories (SOMETIMES plus ops directories .cloudseed + .github)
-    # paths:
-    #   # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#filter-pattern-cheat-sheet
-    #   - "app/**"
-    #   - "ci/**"
-    # - ".cloudseed/**"
-    # - ".github/**"
-
 env:
   DOCKER_COMPOSE_VERSION: 1.25.4
   DOCKER_BUILDKIT: 1
@@ -40,13 +32,5 @@ jobs:
       - name: Build and test app on the self-hosted runner
         uses: ./.github/actions/self-hosted
         timeout-minutes: 30
-        env:
-          # Disable buildkit for tests on the self-hosted runner
-          # since having the local cache is the biggest speed improvement
-          DOCKER_BUILDKIT: 0
-          DOCKER_REGISTRY: ghcr.io
-          # https://docs.github.com/en/free-pro-team@latest/actions/reference/authentication-in-a-workflow#about-the-github_token-secret
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         with:
           command: "just test"
-          github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}

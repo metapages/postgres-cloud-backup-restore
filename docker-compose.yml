@@ -13,7 +13,7 @@ services:
     environment:
       # Configure the postgres database connection
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/postgres
-      - RCLONE_PATH=localstack:test-bucket/backups
+      - RCLONE_URL=localstack:test-bucket/backups
       # pg_dump args
       # Configure the remote cloud storage
       - RCLONE_CONFIG_LOCALSTACK_TYPE=s3
