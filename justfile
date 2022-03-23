@@ -10,9 +10,38 @@ DOCKER_PASSWORD   := env_var_or_default("DOCKER_PASSWORD", "")
     just --list --unsorted --list-heading $'⚡ Repository commands: (docs for needed env vars https://github.com/metapages/postgres-cloud-backup-restore)\n'
     printf "\n"
 
-# Bump the version and push a git tag (triggers pushing new docker image)
-publish:
-    echo todo
+# Bump the version and push a git tag (triggers pushing new docker image) [major, minor, patch]
+publish inc="patch":
+    #!/usr/bin/env deno run --unstable --allow-all
+    import * as semver from "https://deno.land/x/semver@v1.4.0/mod.ts";
+    import { exec, OutputMode } from "https://deno.land/x/exec@0.0.5/mod.ts";
+    //let response = await exec('git ls-remote --tags origin', {output: OutputMode.Capture});
+    let response = await exec('git tag', {output: OutputMode.Capture});
+    if (response.status.code !== 0) {
+        console.log(response);
+        throw new Error("Failed to list tags");
+    }
+    let tags = response.output
+        .split("\n")
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .filter(line => semver.valid(line));
+    tags.sort(semver.compare);
+    let current = tags.length > 0 ? tags[tags.length - 1] : "0.0.0";
+    let next = semver.inc(current, "{{inc}}");
+    response = await exec(`git tag v${next}`, {output: OutputMode.StdOut});
+    if (response.status.code !== 0) {
+        console.log(response.output);
+        throw new Error("Failed to create tag");
+    }
+    response = await exec(`git push origin v${next}`, {output: OutputMode.StdOut});
+    if (response.status.code !== 0) {
+        console.log(response.output);
+        throw new Error("Failed to push tag");
+    }
+    console.log(`Version v${semver.clean(current)} -> v${semver.clean(next)} (tag pushed to git origin)`);
+
+
 
 # Push (versioned from git tag) (both arm64/amd64) images to the registry.
 push: (_ensure "DOCKER_USERNAME") (_ensure "DOCKER_PASSWORD")
