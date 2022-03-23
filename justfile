@@ -1,47 +1,19 @@
 # Entry point repository sub-commands, help, and general starting tasks
-set shell         := ["bash", "-c"]
-set dotenv-load   := true
-export DOCKER_TAG := env_var_or_default("DOCKER_TAG", `if [ "${GITHUB_ACTIONS}" = "true" ]; then echo "${GITHUB_SHA}"; else echo "$(git rev-parse --short=8 HEAD)"; fi`)
-DOCKER_USERNAME   := env_var_or_default("DOCKER_USERNAME", "")
-DOCKER_PASSWORD   := env_var_or_default("DOCKER_PASSWORD", "")
+set shell          := ["bash", "-c"]
+set dotenv-load    := true
+export DOCKER_TAG  := env_var_or_default("DOCKER_TAG", `if [ "${GITHUB_ACTIONS}" = "true" ]; then echo "${GITHUB_SHA}"; else echo "$(git rev-parse --short=8 HEAD)"; fi`)
+DOCKER_USERNAME    := env_var_or_default("DOCKER_USERNAME", "")
+DOCKER_PASSWORD    := env_var_or_default("DOCKER_PASSWORD", "")
+export DENO_SOURCE := env_var_or_default("DENO_SOURCE", "https://deno.land/x/cloudseed@v0.0.19")
 
 @_help:
     printf "\n"
     just --list --unsorted --list-heading $'⚡ Repository commands: (docs for needed env vars https://github.com/metapages/postgres-cloud-backup-restore)\n'
     printf "\n"
 
-# Bump the version and push a git tag (triggers pushing new docker image) [major, minor, patch]
-publish inc="patch":
-    #!/usr/bin/env deno run --unstable --allow-all
-    import * as semver from "https://deno.land/x/semver@v1.4.0/mod.ts";
-    import { exec, OutputMode } from "https://deno.land/x/exec@0.0.5/mod.ts";
-    //let response = await exec('git ls-remote --tags origin', {output: OutputMode.Capture});
-    let response = await exec('git tag', {output: OutputMode.Capture});
-    if (response.status.code !== 0) {
-        console.log(response);
-        throw new Error("Failed to list tags");
-    }
-    let tags = response.output
-        .split("\n")
-        .map(line => line.trim())
-        .filter(line => line.length > 0)
-        .filter(line => semver.valid(line));
-    tags.sort(semver.compare);
-    let current = tags.length > 0 ? tags[tags.length - 1] : "0.0.0";
-    let next = semver.inc(current, "{{inc}}");
-    response = await exec(`git tag v${next}`, {output: OutputMode.StdOut});
-    if (response.status.code !== 0) {
-        console.log(response.output);
-        throw new Error("Failed to create tag");
-    }
-    response = await exec(`git push origin v${next}`, {output: OutputMode.StdOut});
-    if (response.status.code !== 0) {
-        console.log(response.output);
-        throw new Error("Failed to push tag");
-    }
-    console.log(`Version v${semver.clean(current)} -> v${semver.clean(next)} (tag pushed to git origin)`);
-
-
+# Bump the version and push a git tag (triggers pushing new docker image). inc=major|minor|patch
+@publish inc="patch":
+    deno run --unstable --allow-all {{DENO_SOURCE}}/cloudseed/publish.ts --increment={{inc}}
 
 # Push (versioned from git tag) (both arm64/amd64) images to the registry.
 push: (_ensure "DOCKER_USERNAME") (_ensure "DOCKER_PASSWORD")
