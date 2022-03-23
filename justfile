@@ -10,8 +10,12 @@ DOCKER_PASSWORD   := env_var_or_default("DOCKER_PASSWORD", "")
     just --list --unsorted --list-heading $'⚡ Repository commands: (docs for needed env vars https://github.com/metapages/postgres-cloud-backup-restore)\n'
     printf "\n"
 
+# Bump the version and push a git tag (triggers pushing new docker image)
+publish:
+    echo todo
+
 # Push (versioned from git tag) (both arm64/amd64) images to the registry.
-publish: (_ensure "DOCKER_USERNAME") (_ensure "DOCKER_PASSWORD")
+push: (_ensure "DOCKER_USERNAME") (_ensure "DOCKER_PASSWORD")
     #!/usr/bin/env bash
     set -euo pipefail
     export DOCKER_BUILDKIT=1
